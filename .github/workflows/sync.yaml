@@ -25,9 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
     outputs:
       release: ${{ steps.sync.outputs.release }}
+      commit: ${{ steps.sync.outputs.commit }}
+      failure_reason: ${{ steps.sync.outputs.failure_reason }}
     steps:
       # Pushes go through a write deploy key: GITHUB_TOKEN may not push commits that
       # touch .github/workflows, and a rebase rewrites the fork's CI commit.
@@ -54,21 +55,36 @@ jobs:
           FORCE_RELEASE: ${{ inputs.force_release || false }}
         run: bash .github/scripts/sync-upstream.sh
 
-      - name: Report failure as an issue
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REASON: ${{ steps.sync.outputs.failure_reason }}
-        run: bash .github/scripts/report-sync-failure.sh
-
   release:
     needs: sync
     if: needs.sync.outputs.release == 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/release.yaml
+    with:
+      ref: ${{ needs.sync.outputs.commit }}
     secrets:
       TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+
+  # Covers both jobs: a failed release after a successful push must alert too (it is retried
+  # on the next run because the `ankor` tip stays unreleased).
+  report:
+    name: Report failure as an issue
+    needs: [sync, release]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ankor
+          sparse-checkout: .github/scripts
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: ${{ needs.sync.outputs.failure_reason || format('sync job {0}, release job {1}', needs.sync.result, needs.release.result) }}
+        run: bash .github/scripts/report-sync-failure.sh
 
   # GitHub disables scheduled workflows after 60 days without repository activity; a
   # dormant upstream means no activity here. Re-enabling resets that counter.
@@ -80,6 +96,17 @@ jobs:
     permissions:
       actions: write
     steps:
-      - env:
+      - name: Re-enable schedule, keep upstream's release workflow off
+        env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow enable sync.yaml --repo "$GITHUB_REPOSITORY"
+          OBSOLETE: build-and-release.yaml
+        run: |
+          gh workflow enable sync.yaml --repo "$GITHUB_REPOSITORY"
+          # Upstream's broken build-and-release.yaml (on: push) still lives on the mirror `master`
+          # and on upstream tags; if GitHub registers it after a push, switch it off.
+          state="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${OBSOLETE}" --jq .state 2>/dev/null || true)"
+          [[ "$state" == active ]] || exit 0
+          gh workflow disable "$OBSOLETE" --repo "$GITHUB_REPOSITORY"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow "$OBSOLETE" --status queued --json databaseId --jq '.[].databaseId' \
+            | xargs -r -n 1 gh run cancel --repo "$GITHUB_REPOSITORY"
+          echo "::warning::disabled upstream ${OBSOLETE} (it was registered as active)"

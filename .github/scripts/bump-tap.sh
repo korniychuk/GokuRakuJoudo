@@ -32,6 +32,7 @@ class Goku < Formula
   version "${FORMULA_VERSION}"
   sha256 "${SHA256}"
 
+  depends_on :macos
   depends_on arch: :arm64
   depends_on "joker"
   depends_on "watchexec"

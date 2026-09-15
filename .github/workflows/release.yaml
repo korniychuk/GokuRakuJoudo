@@ -5,7 +5,17 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA to build
+        type: string
+        default: ankor
   workflow_call:
+    inputs:
+      ref:
+        description: Exact commit tested by sync.yaml
+        type: string
+        required: true
     secrets:
       TAP_DEPLOY_KEY:
         required: true
@@ -24,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ankor
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
 
       - name: Setup GraalVM
