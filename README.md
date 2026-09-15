@@ -1,6 +1,16 @@
 
 # GokuRakuJoudo
 
+> **This is a maintained fork** of [yqrashawn/GokuRakuJoudo](https://github.com/yqrashawn/GokuRakuJoudo).
+> Default branch `ankor` = upstream `master` + a small patch series, rebased automatically every week
+> (`.github/workflows/sync.yaml`) and released as `vX.Y.Z-ankor.N` for Apple Silicon.
+>
+> - Adds consumer keys `scan_next_track` / `scan_previous_track` (upstream issue
+>   [#184](https://github.com/yqrashawn/GokuRakuJoudo/issues/184)).
+> - Working release CI + Homebrew tap: `brew install korniychuk/tap/goku`.
+>
+> Everything else below is upstream's README.
+
 ![img](https://travis-ci.com/yqrashawn/GokuRakuJoudo.svg?branch=master)
 ![img](https://coveralls.io/repos/github/yqrashawn/GokuRakuJoudo/badge.svg)
 
