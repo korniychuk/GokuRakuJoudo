@@ -1,0 +1,91 @@
+# Fork release (korniychuk/GokuRakuJoudo): build the arm64 native binary, publish a
+# GitHub release tagged v<upstream>-ankor.<N>, and bump korniychuk/homebrew-tap.
+# Replaces upstream's build-and-release.yaml. Called by sync.yaml; also runnable by hand.
+name: Release
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      TAP_DEPLOY_KEY:
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, release, bump tap
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ankor
+          fetch-depth: 0
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "21"
+          distribution: "graalvm"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/
+          key: ${{ runner.os }}-maven-${{ hashFiles('./project.clj', './deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Setup Clojure
+        uses: DeLaGuardo/setup-clojure@13.6.0
+        with:
+          lein: latest
+
+      - name: Install joker
+        run: brew install candid82/brew/joker
+
+      - name: Build native binary
+        run: |
+          lein deps
+          make
+          make test-binary
+
+      - name: Compute version
+        id: version
+        run: bash .github/scripts/next-version.sh >> "$GITHUB_OUTPUT"
+
+      - name: Pack
+        id: pack
+        run: |
+          cat > gokuw <<'EOF'
+          #!/bin/sh
+          exec watchexec -r -e edn -w "${GOKU_EDN_CONFIG_FILE:-$HOME/.config/karabiner.edn}" goku
+          EOF
+          chmod +x goku gokuw
+          zip -j goku-aarch64-apple-darwin.zip goku gokuw
+          echo "sha256=$(shasum -a 256 goku-aarch64-apple-darwin.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ steps.version.outputs.commit }}
+          name: ${{ steps.version.outputs.tag }}
+          files: goku-aarch64-apple-darwin.zip
+          body: |
+            Fork build of upstream `${{ steps.version.outputs.base }}` + fork patches (see README).
+            - `goku-aarch64-apple-darwin.zip` sha256 `${{ steps.pack.outputs.sha256 }}`
+            - Install: `brew install korniychuk/tap/goku`
+
+      - name: Bump homebrew tap
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+          TAG: ${{ steps.version.outputs.tag }}
+          FORMULA_VERSION: ${{ steps.version.outputs.formula_version }}
+          SHA256: ${{ steps.pack.outputs.sha256 }}
+        run: bash .github/scripts/bump-tap.sh
