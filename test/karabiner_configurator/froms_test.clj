@@ -22,7 +22,9 @@
                :dorder :insensitive}
         :modi :left_command}
    :12 {:key :!CSd}
-   :13 [{:pkey :button5} {:pkey :button2}]})
+   :13 [{:pkey :button5} {:pkey :button2}]
+   :14 {:ckey :scan_next_track :modi :left_command}
+   :15 {:ckey :scan_previous_track}})
 
 (def result
   {:applications {}
@@ -52,6 +54,9 @@
                                        :key_up_when "any"}}
            :4 {:modifiers {:mandatory ["left_command" "right_shift"]}
                :key_code "d"}
+           :14 {:modifiers {:mandatory ["left_command"]}
+                :consumer_key_code "scan_next_track"}
+           :15 {:consumer_key_code "scan_previous_track"}
            :7 {:consumer_key_code "display_brightness_decrement"}
            :1 {:key_code "d"}
            :8 {:modifiers {:mandatory ["left_command"]}

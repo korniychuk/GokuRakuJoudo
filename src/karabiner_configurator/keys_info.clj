@@ -146,6 +146,8 @@
    :rewind {:not-from true :consumer-key true}
    :play_or_pause {:not-from true :consumer-key true}
    :fast_forward {:not-from true :consumer-key true}
+   :scan_next_track {:consumer-key true}
+   :scan_previous_track {:consumer-key true}
    :dictation {:not-from true :consumer-key true}
    :mute {:consumer-key true}
    :volume_decrement {:consumer-key true}
