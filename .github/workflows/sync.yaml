@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: write
     outputs:
       release: ${{ steps.sync.outputs.release }}
       commit: ${{ steps.sync.outputs.commit }}
@@ -49,9 +50,15 @@ jobs:
         with:
           lein: latest
 
+      - name: Keep upstream's release workflow off (before any push)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/disable-obsolete-workflow.sh
+
       - name: Sync
         id: sync
         env:
+          GH_TOKEN: ${{ github.token }}
           FORCE_RELEASE: ${{ inputs.force_release || false }}
         run: bash .github/scripts/sync-upstream.sh
 
@@ -94,19 +101,17 @@ jobs:
     needs: [sync, release]
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       actions: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ankor
+          sparse-checkout: .github/scripts
       - name: Re-enable schedule, keep upstream's release workflow off
         env:
           GH_TOKEN: ${{ github.token }}
-          OBSOLETE: build-and-release.yaml
         run: |
           gh workflow enable sync.yaml --repo "$GITHUB_REPOSITORY"
-          # Upstream's broken build-and-release.yaml (on: push) still lives on the mirror `master`
-          # and on upstream tags; if GitHub registers it after a push, switch it off.
-          state="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${OBSOLETE}" --jq .state 2>/dev/null || true)"
-          [[ "$state" == active ]] || exit 0
-          gh workflow disable "$OBSOLETE" --repo "$GITHUB_REPOSITORY"
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow "$OBSOLETE" --status queued --json databaseId --jq '.[].databaseId' \
-            | xargs -r -n 1 gh run cancel --repo "$GITHUB_REPOSITORY"
-          echo "::warning::disabled upstream ${OBSOLETE} (it was registered as active)"
+          # A push in this run may have registered and started it.
+          bash .github/scripts/disable-obsolete-workflow.sh
