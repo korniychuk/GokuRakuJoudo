@@ -6,6 +6,14 @@
 set -euo pipefail
 
 readonly FORK_SUFFIX='-ankor.'
+readonly UPSTREAM_URL='https://github.com/yqrashawn/GokuRakuJoudo.git'
+
+# The fork's own tag set can lag upstream (GitHub created it from a stale snapshot), so the
+# version base always comes from upstream's tags.
+if ! git fetch --quiet --tags "$UPSTREAM_URL" >&2; then
+  echo "::error::cannot fetch upstream tags from ${UPSTREAM_URL}" >&2
+  exit 1
+fi
 
 base="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- "$FORK_SUFFIX" | head -n 1 || true)"
 if [[ -z "$base" ]]; then
